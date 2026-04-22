@@ -1,0 +1,13 @@
+{
+  "name": "epoch-bridge",
+  "version": "1.0.0",
+  "description": "Telegram to HuggingFace Bridge",
+  "main": "render-tg-bridge.js",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "scripts": {
+    "start": "node render-tg-bridge.js"
+  }
+}
+
