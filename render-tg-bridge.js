@@ -58,7 +58,8 @@ app.get("/setup-webhook", (req, res) => {
     return res.status(500).send("❌ Missing TELEGRAM_BOT_TOKEN or HF_SPACE_URL env vars");
   }
 
-  const webhookUrl = `${req.protocol}://${req.get("host")}/tg-webhook/${SECRET}`;
+  // FIX: Hardcoded 'https://' instead of using req.protocol
+  const webhookUrl = `https://${req.get("host")}/tg-webhook/${SECRET}`;
   const apiUrl     = `https://api.telegram.org/bot${TG_TOKEN}/setWebhook`;
   const body       = JSON.stringify({
     url:                  webhookUrl,
@@ -100,7 +101,8 @@ app.get("/health", (req, res) => {
     status:  "ok",
     tg:      !!TG_TOKEN,
     hf_url:  HF_URL || "not set",
-    webhook: `${req.protocol}://${req.get("host")}/tg-webhook/${SECRET}`,
+    // FIX: Hardcoded 'https://' here as well for consistency
+    webhook: `https://${req.get("host")}/tg-webhook/${SECRET}`,
   });
 });
 
