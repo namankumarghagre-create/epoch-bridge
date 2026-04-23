@@ -1,10 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-//  Render Telegram Bridge  — add this to your existing Render server
-//  
-//  1. Deploy this on Render (alongside your WhatsApp bridge)
-//  2. Set env: TELEGRAM_BOT_TOKEN, HF_SPACE_URL
-//  3. Run: node render-tg-bridge.js  (or merge into existing server)
-//  4. After deploy, visit: https://YOUR-RENDER-URL/setup-webhook
+//  Render Telegram Bridge (RECEIVE & SEND)
 // ═══════════════════════════════════════════════════════════
 
 const express = require("express");
@@ -14,18 +9,17 @@ const app  = express();
 app.use(express.json());
 
 const TG_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
-const HF_URL     = process.env.HF_SPACE_URL;          // e.g. https://NamanZO-Epoch-system.hf.space
+const HF_URL     = process.env.HF_SPACE_URL;          
 const PORT       = process.env.PORT || 3000;
 const SECRET     = process.env.TG_WEBHOOK_SECRET || "epoch_secret_2026";
 
-// ── 1. Telegram sends updates HERE ──────────────────────────
+// ── 1. RECEIVE: Telegram sends updates HERE ─────────────────
 app.post(`/tg-webhook/${SECRET}`, async (req, res) => {
-  res.sendStatus(200);   // ACK Telegram instantly
+  res.sendStatus(200);   
 
   const update = req.body;
   if (!update) return;
 
-  // Forward to HuggingFace Space
   try {
     const body = JSON.stringify(update);
     const hfUrl = new URL(`${HF_URL}/telegram-webhook`);
@@ -52,15 +46,13 @@ app.post(`/tg-webhook/${SECRET}`, async (req, res) => {
   }
 });
 
-// ── 2. One-time setup: register webhook with Telegram ───────
+// ── 2. SETUP: Register webhook with Telegram ────────────────
 app.get("/setup-webhook", (req, res) => {
   if (!TG_TOKEN || !HF_URL) {
     return res.status(500).send("❌ Missing TELEGRAM_BOT_TOKEN or HF_SPACE_URL env vars");
   }
 
-  // FIX: Hardcoded 'https://' instead of using req.protocol
   const webhookUrl = `https://${req.get("host")}/tg-webhook/${SECRET}`;
-  const apiUrl     = `https://api.telegram.org/bot${TG_TOKEN}/setWebhook`;
   const body       = JSON.stringify({
     url:                  webhookUrl,
     drop_pending_updates: true,
@@ -95,15 +87,46 @@ app.get("/setup-webhook", (req, res) => {
   apiReq.end();
 });
 
-// ── 3. Health check ──────────────────────────────────────────
+// ── 3. HEALTH CHECK ─────────────────────────────────────────
 app.get("/health", (req, res) => {
   res.json({
     status:  "ok",
     tg:      !!TG_TOKEN,
     hf_url:  HF_URL || "not set",
-    // FIX: Hardcoded 'https://' here as well for consistency
     webhook: `https://${req.get("host")}/tg-webhook/${SECRET}`,
   });
+});
+
+// ── 4. SEND: Hugging Face sends replies back HERE ───────────
+app.post("/tg-send", (req, res) => {
+  const { method, payload } = req.body;
+  if (!method || !payload) return res.status(400).json({ error: "Missing method or payload" });
+
+  const body = JSON.stringify(payload);
+  const options = {
+    hostname: "api.telegram.org",
+    path:     `/bot${TG_TOKEN}/${method}`,
+    method:   "POST",
+    headers: {
+      "Content-Type":   "application/json",
+      "Content-Length": Buffer.byteLength(body),
+    },
+  };
+
+  const apiReq = https.request(options, (apiRes) => {
+    let data = "";
+    apiRes.on("data", (chunk) => data += chunk);
+    apiRes.on("end", () => {
+      try {
+        res.status(apiRes.statusCode).json(JSON.parse(data));
+      } catch(e) {
+        res.status(500).json({ error: "Parse error" });
+      }
+    });
+  });
+  apiReq.on("error", (e) => res.status(500).json({ error: e.message }));
+  apiReq.write(body);
+  apiReq.end();
 });
 
 app.listen(PORT, () => {
